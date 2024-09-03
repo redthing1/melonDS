@@ -1562,6 +1562,19 @@ void NDS::MonitorARM9Jump(u32 addr)
             RunningGame = true;
         }
     }
+
+    if (ARM9Coverage.is_tracing) {
+        // Log(LogLevel::Debug, "ARM9Coverage: hit %08x\n", addr);
+        ARM9Coverage.curr_trace->hit(addr);
+    }
+}
+
+void NDS::MonitorARM7Jump(u32 addr)
+{
+    if (ARM7Coverage.is_tracing) {
+        // Log(LogLevel::Debug, "ARM7Coverage: hit %08x\n", addr);
+        ARM7Coverage.curr_trace->hit(addr);
+    }
 }
 
 

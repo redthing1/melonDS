@@ -298,6 +298,8 @@ void ARMv5::JumpTo(u32 addr, bool restorecpsr)
     //if (addr == 0x0201764C) printf("capture test %d: R1=%08X\n", R[6], R[1]);
     //if (addr == 0x020175D8) printf("capture test %d: res=%08X\n", R[6], R[0]);
 
+    // R[15] is the PC register
+
     u32 oldregion = R[15] >> 24;
     u32 newregion = addr >> 24;
 
@@ -394,6 +396,8 @@ void ARMv4::JumpTo(u32 addr, bool restorecpsr)
 
         CPSR &= ~0x20;
     }
+
+    NDS.MonitorARM7Jump(addr);
 }
 
 void ARM::RestoreCPSR()

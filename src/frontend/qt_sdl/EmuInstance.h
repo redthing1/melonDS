@@ -114,6 +114,9 @@ public:
     void enableCheats(bool enable);
     melonDS::ARCodeFile* getCheatFile();
 
+    void coverageBegin();
+    void coverageEnd();
+
     void romIcon(const melonDS::u8 (&data)[512],
                  const melonDS::u16 (&palette)[16],
                  melonDS::u32 (&iconRef)[32*32]);

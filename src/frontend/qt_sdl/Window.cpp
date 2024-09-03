@@ -405,6 +405,15 @@ MainWindow::MainWindow(int id, EmuInstance* inst, QWidget* parent) :
 
         menu->addSeparator();
 
+        actCoverageBegin = menu->addAction("Coverage begin");
+        connect(actCoverageBegin, &QAction::triggered, this, &MainWindow::onCoverageBegin);
+
+        actCoverageEnd = menu->addAction("Coverage end");
+        actCoverageEnd->setEnabled(false);
+        connect(actCoverageEnd, &QAction::triggered, this, &MainWindow::onCoverageEnd);
+
+        menu->addSeparator();
+
         actEnableCheats = menu->addAction("Enable cheats");
         actEnableCheats->setCheckable(true);
         connect(actEnableCheats, &QAction::triggered, this, &MainWindow::onEnableCheats);
@@ -1654,6 +1663,22 @@ void MainWindow::onEnableCheats(bool checked)
 {
     localCfg.SetBool("EnableCheats", checked);
     emuInstance->enableCheats(checked);
+}
+
+void MainWindow::onCoverageBegin() {
+    emuInstance->coverageBegin();
+    // disable coverage begin menu item
+    actCoverageBegin->setEnabled(false);
+    // enable coverage end menu item
+    actCoverageEnd->setEnabled(true);
+}
+
+void MainWindow::onCoverageEnd() {
+    emuInstance->coverageEnd();
+    // enable coverage begin menu item
+    actCoverageBegin->setEnabled(true);
+    // disable coverage end menu item
+    actCoverageEnd->setEnabled(false);
 }
 
 void MainWindow::onSetupCheats()

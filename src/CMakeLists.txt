@@ -13,6 +13,7 @@ add_library(core STATIC
     ARMInterpreter_LoadStore.cpp
     CP15.cpp
     CRC32.cpp
+    Coverage.cpp
     DMA.cpp
     DMA_Timings.h
     DMA_Timings.cpp

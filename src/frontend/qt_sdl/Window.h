@@ -164,6 +164,8 @@ private slots:
     void onFrameStep();
     void onOpenPowerManagement();
     void onOpenDateTime();
+    void onCoverageBegin();
+    void onCoverageEnd();
     void onEnableCheats(bool checked);
     void onSetupCheats();
     void onCheatsDialogFinished(int res);
@@ -284,6 +286,8 @@ public:
     QAction* actFrameStep;
     QAction* actPowerManagement;
     QAction* actDateTime;
+    QAction* actCoverageBegin;
+    QAction* actCoverageEnd;
     QAction* actEnableCheats;
     QAction* actSetupCheats;
     QAction* actROMInfo;

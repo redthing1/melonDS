@@ -42,6 +42,7 @@
 #include "CRC32.h"
 #include "DMA.h"
 #include "FreeBIOS.h"
+#include "Coverage.h"
 
 // when touching the main loop/timing code, pls test a lot of shit
 // with this enabled, to make sure it doesn't desync
@@ -307,6 +308,8 @@ public: // TODO: Encapsulate the rest of these members
     GBACart::GBACartSlot GBACartSlot;
     melonDS::GPU GPU;
     melonDS::AREngine AREngine;
+    Coverage ARM9Coverage;
+    Coverage ARM7Coverage;
 
     const u32 ARM7WRAMSize = 0x10000;
     u8* ARM7WRAM;
@@ -429,6 +432,7 @@ public: // TODO: Encapsulate the rest of these members
     void NocashPrint(u32 cpu, u32 addr, bool appendNewline = true);
 
     void MonitorARM9Jump(u32 addr);
+    void MonitorARM7Jump(u32 addr);
 
     virtual bool DMAsInMode(u32 cpu, u32 mode) const;
     virtual bool DMAsRunning(u32 cpu) const;

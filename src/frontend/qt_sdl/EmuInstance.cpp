@@ -1067,6 +1067,60 @@ ARCodeFile* EmuInstance::getCheatFile()
     return cheatFile.get();
 }
 
+void EmuInstance::coverageBegin()
+{
+    // log
+    Log(LogLevel::Info, "Coverage begin\n");
+
+    // start tracing
+    nds->ARM9Coverage.new_trace();
+    nds->ARM7Coverage.new_trace();
+    nds->ARM9Coverage.start_tracing();
+    nds->ARM7Coverage.start_tracing();
+}
+
+void EmuInstance::coverageEnd()
+{
+    // log
+    Log(LogLevel::Info, "Coverage end\n");
+
+    // ensure that there is coverage data
+    if (!nds->ARM9Coverage.is_tracing || !nds->ARM7Coverage.is_tracing) {
+        Log(LogLevel::Error, "No coverage data; coverage not saved\n");
+        return;
+    }
+
+    // stop tracing
+    nds->ARM9Coverage.stop_tracing();
+    nds->ARM7Coverage.stop_tracing();
+
+    // get traces
+    CoverageTrace arm9trace = *nds->ARM9Coverage.curr_trace;
+    CoverageTrace arm7trace = *nds->ARM7Coverage.curr_trace;
+
+    // commit traces
+    nds->ARM9Coverage.commit_trace();
+    nds->ARM7Coverage.commit_trace();
+
+    // for simplicity, we will merge the two traces
+    CoverageTrace merged_trace = CoverageTrace::merge(arm9trace, arm7trace);
+
+    // log trace statistics
+    Log(LogLevel::Info, "Coverage trace statistics: n_blocks=%d, n_hits=%d\n",
+        merged_trace.total_block_count(), merged_trace.total_hit_count());
+
+    // save to coverage_<YYYYMMDD_HHMMSS>.cov
+    std::string filename = "coverage_";
+    filename += QDateTime::currentDateTime().toString("yyyyMMdd_hhmmss").toStdString();
+    filename += ".cov";
+
+    Log(LogLevel::Info, "Saving coverage trace to %s\n", filename.c_str());
+
+    // open an ostream and write the trace
+    std::ofstream cov_save_file(filename);
+    CoverageTrace::write(cov_save_file, merged_trace);
+}
+
 void EmuInstance::setBatteryLevels()
 {
     if (consoleType == 1)
