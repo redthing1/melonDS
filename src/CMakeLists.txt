@@ -12,6 +12,7 @@ add_library(core STATIC
     ARMInterpreter_Branch.cpp
     ARMInterpreter_LoadStore.cpp
     CP15.cpp
+    CoverageTracker.cpp
     CRC32.cpp
     DMA.cpp
     DMA_Timings.h
@@ -190,4 +191,3 @@ endif()
 #    BEFORE PUBLIC -fsanitize=undefined PUBLIC -fsanitize=address
 #  )
 #endif()
-

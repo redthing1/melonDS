@@ -28,6 +28,8 @@
 
 #include <SDL2/SDL.h>
 
+#include <QStringList>
+
 #include "main.h"
 
 #include "types.h"
@@ -528,6 +530,19 @@ void EmuThread::handleMessages()
             break;
 
         case msg_EmuStop:
+        {
+            QStringList coverageFiles;
+            QString coverageErr;
+            if (!emuInstance->flushCoverageIfActive(&coverageFiles, &coverageErr))
+            {
+                emuInstance->osdAddMessage(0xFFA0A0, "Coverage flush failed: %s", coverageErr.toStdString().c_str());
+            }
+            else
+            {
+                for (const auto& path : coverageFiles)
+                    emuInstance->osdAddMessage(0, "Coverage saved: %s", path.toStdString().c_str());
+            }
+
             if (msg.stopExternal) emuInstance->nds->Stop();
             emuStatus = emuStatus_Paused;
             emuActive = false;
@@ -535,12 +550,26 @@ void EmuThread::handleMessages()
             emuInstance->audioDisable();
             emit windowEmuStop();
             break;
+        }
 
         case msg_EmuFrameStep:
             emuStatus = emuStatus_FrameStep;
             break;
 
         case msg_EmuReset:
+        {
+            QStringList coverageFiles;
+            QString coverageErr;
+            if (!emuInstance->flushCoverageIfActive(&coverageFiles, &coverageErr))
+            {
+                emuInstance->osdAddMessage(0xFFA0A0, "Coverage flush failed: %s", coverageErr.toStdString().c_str());
+            }
+            else
+            {
+                for (const auto& path : coverageFiles)
+                    emuInstance->osdAddMessage(0, "Coverage saved: %s", path.toStdString().c_str());
+            }
+
             emuInstance->reset();
 
             emuStatus = emuStatus_Running;
@@ -551,6 +580,7 @@ void EmuThread::handleMessages()
             emit windowEmuReset();
             emuInstance->osdAddMessage(0, "Reset");
             break;
+        }
 
         case msg_InitGL:
             emuInstance->initOpenGL();

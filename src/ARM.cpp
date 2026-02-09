@@ -622,6 +622,8 @@ void ARMv5::Execute()
                 return;
             }
 
+            NDS.RecordCoverageBlock(0, instrAddr);
+
             JitBlockEntry block = NDS.JIT.LookUpBlock(0, FastBlockLookup,
                 instrAddr - FastBlockLookupStart, instrAddr);
             if (block)
@@ -761,6 +763,8 @@ void ARMv4::Execute()
                 Log(LogLevel::Error, "ARMv4 PC in non executable region %08X\n", R[15]);
                 return;
             }
+
+            NDS.RecordCoverageBlock(1, instrAddr);
 
             JitBlockEntry block = NDS.JIT.LookUpBlock(1, FastBlockLookup,
                 instrAddr - FastBlockLookupStart, instrAddr);
@@ -1301,4 +1305,3 @@ void ARMv4::BusWrite32(u32 addr, u32 val)
     NDS.ARM7Write32(addr, val);
 }
 }
-

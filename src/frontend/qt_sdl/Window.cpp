@@ -395,6 +395,9 @@ MainWindow::MainWindow(int id, EmuInstance* inst, QWidget* parent) :
         actFrameStep = menu->addAction("Frame step");
         connect(actFrameStep, &QAction::triggered, this, &MainWindow::onFrameStep);
 
+        actCoverage = menu->addAction("Start Coverage");
+        connect(actCoverage, &QAction::triggered, this, &MainWindow::onToggleCoverage);
+
         menu->addSeparator();
 
         actPowerManagement = menu->addAction("Power management");
@@ -693,6 +696,7 @@ MainWindow::MainWindow(int id, EmuInstance* inst, QWidget* parent) :
     actReset->setEnabled(false);
     actStop->setEnabled(false);
     actFrameStep->setEnabled(false);
+    actCoverage->setEnabled(false);
 
     actDateTime->setEnabled(true);
     actPowerManagement->setEnabled(false);
@@ -756,6 +760,7 @@ MainWindow::MainWindow(int id, EmuInstance* inst, QWidget* parent) :
 
     QObject::connect(qApp, &QApplication::applicationStateChanged, this, &MainWindow::onAppStateChanged);
     onUpdateInterfaceSettings();
+    updateCoverageAction();
 
     updateMPInterface(MPInterface::GetType());
 }
@@ -1640,6 +1645,74 @@ void MainWindow::onFrameStep()
     emuThread->emuFrameStep();
 }
 
+void MainWindow::updateCoverageAction()
+{
+    bool enable = false;
+    bool active = false;
+    bool jitEnabled = false;
+
+    if (emuInstance->nds != nullptr && emuThread->emuIsActive())
+    {
+        enable = true;
+        active = emuInstance->nds->IsCoverageActive();
+        jitEnabled = emuInstance->nds->IsJITEnabled();
+    }
+
+    actCoverage->setEnabled(enable);
+    actCoverage->setText(active ? "Stop Coverage" : "Start Coverage");
+    actCoverage->setToolTip(enable && !jitEnabled
+        ? "Coverage requires JIT. Enable it in Config > Emu settings."
+        : "");
+}
+
+void MainWindow::onToggleCoverage()
+{
+    if (!emuThread->emuIsActive())
+        return;
+
+    emuThread->emuPause();
+
+    if (emuInstance->nds == nullptr || !emuInstance->nds->IsJITEnabled())
+    {
+        QMessageBox::warning(this, "melonDS",
+            "Coverage requires the JIT recompiler to be enabled.\n"
+            "Enable it in Config > Emu settings.");
+        updateCoverageAction();
+        emuThread->emuUnpause();
+        return;
+    }
+
+    if (!emuInstance->nds->IsCoverageActive())
+    {
+        QString err;
+        if (emuInstance->startCoverageCapture(&err))
+        {
+            emuInstance->osdAddMessage(0, "Coverage capture started");
+        }
+        else
+        {
+            QMessageBox::warning(this, "melonDS", err.isEmpty() ? "Failed to start coverage capture." : err);
+        }
+    }
+    else
+    {
+        QStringList files;
+        QString err;
+        if (emuInstance->stopCoverageCapture(&files, &err))
+        {
+            for (const auto& path : files)
+                emuInstance->osdAddMessage(0, "Coverage saved: %s", path.toStdString().c_str());
+        }
+        else
+        {
+            QMessageBox::warning(this, "melonDS", err.isEmpty() ? "Failed to stop coverage capture." : err);
+        }
+    }
+
+    updateCoverageAction();
+    emuThread->emuUnpause();
+}
+
 void MainWindow::onOpenDateTime()
 {
     DateTimeDialog* dlg = DateTimeDialog::openDlg(this);
@@ -2128,11 +2201,14 @@ void MainWindow::onEmuStart()
     actReset->setEnabled(true);
     actStop->setEnabled(true);
     actFrameStep->setEnabled(true);
+    actCoverage->setEnabled(true);
 
     actDateTime->setEnabled(false);
     actPowerManagement->setEnabled(true);
 
     actTitleManager->setEnabled(false);
+
+    updateCoverageAction();
 }
 
 void MainWindow::onEmuStop()
@@ -2148,11 +2224,14 @@ void MainWindow::onEmuStop()
     actReset->setEnabled(false);
     actStop->setEnabled(false);
     actFrameStep->setEnabled(false);
+    actCoverage->setEnabled(false);
 
     actDateTime->setEnabled(true);
     actPowerManagement->setEnabled(false);
 
     actTitleManager->setEnabled(!globalCfg.GetString("DSi.NANDPath").empty());
+
+    updateCoverageAction();
 }
 
 void MainWindow::onEmuPause(bool pause)
@@ -2163,6 +2242,7 @@ void MainWindow::onEmuPause(bool pause)
 void MainWindow::onEmuReset()
 {
     actUndoStateLoad->setEnabled(false);
+    updateCoverageAction();
 }
 
 void MainWindow::onUpdateVideoSettings(bool glchange)

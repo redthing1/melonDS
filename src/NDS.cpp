@@ -541,6 +541,39 @@ void NDS::Start()
     Running = true;
 }
 
+void NDS::StartCoverage() noexcept
+{
+    Coverage.Start();
+}
+
+bool NDS::IsCoverageActive() const noexcept
+{
+    return Coverage.IsActive();
+}
+
+bool NDS::StopCoverage(CoverageSnapshot& out)
+{
+    return Coverage.Stop(out);
+}
+
+bool NDS::FlushCoverageIfActive(CoverageSnapshot& out)
+{
+    if (!Coverage.IsActive())
+        return false;
+
+    return Coverage.Stop(out);
+}
+
+void NDS::RestoreCoverage(CoverageSnapshot&& snapshot)
+{
+    Coverage.Restore(std::move(snapshot));
+}
+
+void NDS::RecordCoverageBlock(u32 cpuNum, u32 blockAddr) noexcept
+{
+    Coverage.Record(cpuNum, blockAddr);
+}
+
 static const char* StopReasonName(Platform::StopReason reason)
 {
     switch (reason)

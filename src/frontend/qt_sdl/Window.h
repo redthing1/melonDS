@@ -162,6 +162,7 @@ private slots:
     void onReset();
     void onStop();
     void onFrameStep();
+    void onToggleCoverage();
     void onOpenPowerManagement();
     void onOpenDateTime();
     void onEnableCheats(bool checked);
@@ -238,6 +239,7 @@ private:
     QString pickFileFromArchive(QString archiveFileName);
     QStringList pickROM(bool gba);
     void updateCartInserted(bool gba);
+    void updateCoverageAction();
 
     void createScreenPanel();
 
@@ -282,6 +284,7 @@ public:
     QAction* actReset;
     QAction* actStop;
     QAction* actFrameStep;
+    QAction* actCoverage;
     QAction* actPowerManagement;
     QAction* actDateTime;
     QAction* actEnableCheats;

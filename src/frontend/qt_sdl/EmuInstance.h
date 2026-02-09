@@ -139,6 +139,12 @@ public:
 private:
     static int lastSep(const std::string& path);
     std::string getAssetPath(bool gba, const std::string& configpath, const std::string& ext, const std::string& file);
+    bool startCoverageCapture(QString* err = nullptr);
+    bool stopCoverageCapture(QStringList* writtenFiles = nullptr, QString* err = nullptr);
+    bool flushCoverageIfActive(QStringList* writtenFiles = nullptr, QString* err = nullptr);
+    bool writeCoverageSnapshot(const melonDS::CoverageSnapshot& snapshot, QStringList* writtenFiles, QString* err);
+    std::string getCoverageOutputDir();
+    std::string getCoverageGameID() const;
 
     QString verifyDSBIOS();
     QString verifyDSiBIOS();

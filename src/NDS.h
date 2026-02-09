@@ -41,6 +41,7 @@
 #include "ARM.h"
 #include "CRC32.h"
 #include "DMA.h"
+#include "CoverageTracker.h"
 #include "FreeBIOS.h"
 
 // when touching the main loop/timing code, pls test a lot of shit
@@ -390,6 +391,12 @@ public: // TODO: Encapsulate the rest of these members
     u32 RunFrame();
 
     bool IsRunning() const noexcept { return Running; }
+    void StartCoverage() noexcept;
+    [[nodiscard]] bool IsCoverageActive() const noexcept;
+    bool StopCoverage(CoverageSnapshot& out);
+    bool FlushCoverageIfActive(CoverageSnapshot& out);
+    void RestoreCoverage(CoverageSnapshot&& snapshot);
+    void RecordCoverageBlock(u32 cpuNum, u32 blockAddr) noexcept;
 
     void TouchScreen(u16 x, u16 y);
     void ReleaseScreen();
@@ -505,6 +512,7 @@ private:
     u16 KeyCnt[2];
     bool Running;
     bool RunningGame;
+    CoverageTracker Coverage;
     u64 LastSysClockCycles;
     u64 FrameStartTimestamp;
     u64 NextTarget();

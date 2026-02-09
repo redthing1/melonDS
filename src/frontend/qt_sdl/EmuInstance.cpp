@@ -27,8 +27,10 @@
 #include <string>
 #include <utility>
 #include <fstream>
+#include <cctype>
 
 #include <QDateTime>
+#include <QDir>
 #include <QMessageBox>
 
 #include <zstd.h>
@@ -63,6 +65,28 @@ MainWindow* topWindow = nullptr;
 
 const string kWifiSettingsPath = "wfcsettings.bin";
 extern Net net;
+
+namespace
+{
+std::string SanitizeCoverageToken(const std::string& token)
+{
+    std::string out;
+    out.reserve(token.size());
+
+    for (unsigned char c : token)
+    {
+        if (std::isalnum(c) || c == '_' || c == '-')
+            out.push_back((char)c);
+        else
+            out.push_back('_');
+    }
+
+    if (out.empty())
+        return "unknown";
+
+    return out;
+}
+}
 
 
 EmuInstance::EmuInstance(int inst) : deleting(false),
@@ -366,6 +390,194 @@ string EmuInstance::getAssetPath(bool gba, const string& configpath, const strin
     result += ext;
 
     return result;
+}
+
+bool EmuInstance::startCoverageCapture(QString* err)
+{
+    if (nds == nullptr)
+    {
+        if (err) *err = "No emulated console is available.";
+        return false;
+    }
+
+    if (!nds->IsRunning())
+    {
+        if (err) *err = "Emulation is not running.";
+        return false;
+    }
+
+    if (!nds->IsJITEnabled())
+    {
+        if (err) *err = "Coverage requires the JIT recompiler to be enabled.";
+        return false;
+    }
+
+    if (nds->IsCoverageActive())
+    {
+        if (err) *err = "Coverage capture is already active.";
+        return false;
+    }
+
+    nds->StartCoverage();
+    return true;
+}
+
+bool EmuInstance::stopCoverageCapture(QStringList* writtenFiles, QString* err)
+{
+    if (nds == nullptr)
+    {
+        if (err) *err = "No emulated console is available.";
+        return false;
+    }
+
+    CoverageSnapshot snapshot;
+    if (!nds->StopCoverage(snapshot))
+    {
+        if (err) *err = "Coverage capture is not active.";
+        return false;
+    }
+
+    if (!writeCoverageSnapshot(snapshot, writtenFiles, err))
+    {
+        nds->RestoreCoverage(std::move(snapshot));
+        return false;
+    }
+
+    return true;
+}
+
+bool EmuInstance::flushCoverageIfActive(QStringList* writtenFiles, QString* err)
+{
+    if (nds == nullptr || !nds->IsCoverageActive())
+        return true;
+
+    CoverageSnapshot snapshot;
+    if (!nds->FlushCoverageIfActive(snapshot))
+        return true;
+
+    if (!writeCoverageSnapshot(snapshot, writtenFiles, err))
+    {
+        nds->RestoreCoverage(std::move(snapshot));
+        return false;
+    }
+
+    return true;
+}
+
+bool EmuInstance::writeCoverageSnapshot(const CoverageSnapshot& snapshot, QStringList* writtenFiles, QString* err)
+{
+    const QString outDirPath = QString::fromStdString(getCoverageOutputDir());
+    QDir outDir(outDirPath);
+    if (!outDir.exists() && !outDir.mkpath("."))
+    {
+        if (err) *err = "Failed to create coverage output directory.";
+        return false;
+    }
+
+    const QString gameId = QString::fromStdString(getCoverageGameID());
+    const QString timestamp = QDateTime::currentDateTime().toString("yyyyMMdd_HHmmss");
+
+    auto writeFile = [&](const char* cpu, const std::unordered_map<u32, u64>& hits) -> bool
+    {
+        QString filename = QString("%1_%2_coverage_%3.cov")
+            .arg(gameId, timestamp, QString::fromLatin1(cpu));
+        QString fullPath = outDir.filePath(filename);
+
+        std::vector<std::pair<u32, u64>> sortedHits;
+        sortedHits.reserve(hits.size());
+        for (const auto& [addr, count] : hits)
+            sortedHits.emplace_back(addr, count);
+
+        std::sort(sortedHits.begin(), sortedHits.end(),
+            [](const auto& lhs, const auto& rhs)
+            {
+                return lhs.first < rhs.first;
+            });
+
+        std::ofstream file(fullPath.toStdString(), std::ios::out | std::ios::trunc);
+        if (!file.is_open())
+        {
+            if (err) *err = QString("Failed to open coverage output file: %1").arg(fullPath);
+            return false;
+        }
+
+        for (const auto& [addr, count] : sortedHits)
+        {
+            char addrHex[9];
+            snprintf(addrHex, sizeof(addrHex), "%08X", addr);
+            file << addrHex << ' ' << count << '\n';
+        }
+
+        if (!file.good())
+        {
+            if (err) *err = QString("Failed while writing coverage output file: %1").arg(fullPath);
+            return false;
+        }
+
+        if (writtenFiles)
+            writtenFiles->append(fullPath);
+        return true;
+    };
+
+    if (!writeFile("arm9", snapshot.Arm9))
+        return false;
+    if (!writeFile("arm7", snapshot.Arm7))
+        return false;
+    return true;
+}
+
+std::string EmuInstance::getCoverageOutputDir()
+{
+    QString path;
+    const std::string configuredPath = globalCfg.GetString("SaveFilePath");
+    if (!configuredPath.empty())
+        path = QString::fromStdString(configuredPath);
+    else if (!baseROMDir.empty())
+        path = QString::fromStdString(baseROMDir);
+    else
+        path = emuDirectory;
+
+    if (QDir(path).isRelative())
+        path = QDir(emuDirectory).filePath(path);
+
+    return QDir::cleanPath(path).toStdString();
+}
+
+std::string EmuInstance::getCoverageGameID() const
+{
+    if (nds != nullptr)
+    {
+        if (const NDSCart::CartCommon* cart = nds->GetNDSCart())
+        {
+            const auto& header = cart->GetHeader();
+            std::string gameCode(header.GameCode, 4);
+
+            bool valid = gameCode != "####";
+            for (unsigned char c : gameCode)
+            {
+                if (c < 0x20 || c > 0x7E)
+                {
+                    valid = false;
+                    break;
+                }
+            }
+
+            if (valid)
+            {
+                std::transform(gameCode.begin(), gameCode.end(), gameCode.begin(),
+                    [](unsigned char c) -> char
+                    {
+                        return (char)std::toupper(c);
+                    });
+                return SanitizeCoverageToken(gameCode);
+            }
+        }
+    }
+
+    if (!baseAssetName.empty())
+        return SanitizeCoverageToken(baseAssetName);
+
+    return "unknown";
 }
 
 
@@ -1709,6 +1921,16 @@ QString EmuInstance::getSavErrorString(std::string& filepath, bool gba)
 
 bool EmuInstance::loadROM(QStringList filepath, bool reset)
 {
+    QStringList coverageFiles;
+    QString coverageErr;
+    if (!flushCoverageIfActive(&coverageFiles, &coverageErr))
+    {
+        QMessageBox::warning(mainWindow, "melonDS", coverageErr);
+        return false;
+    }
+    for (const auto& path : coverageFiles)
+        osdAddMessage(0, "Coverage saved: %s", path.toStdString().c_str());
+
     unique_ptr<u8[]> filedata = nullptr;
     u32 filelen;
     std::string basepath;
@@ -1811,6 +2033,18 @@ bool EmuInstance::loadROM(QStringList filepath, bool reset)
 
 void EmuInstance::ejectCart()
 {
+    QStringList coverageFiles;
+    QString coverageErr;
+    if (!flushCoverageIfActive(&coverageFiles, &coverageErr))
+    {
+        QMessageBox::warning(mainWindow, "melonDS", coverageErr);
+    }
+    else
+    {
+        for (const auto& path : coverageFiles)
+            osdAddMessage(0, "Coverage saved: %s", path.toStdString().c_str());
+    }
+
     ndsSave = nullptr;
 
     unloadCheats();
@@ -1845,6 +2079,16 @@ QString EmuInstance::cartLabel()
 
 bool EmuInstance::loadGBAROM(QStringList filepath)
 {
+    QStringList coverageFiles;
+    QString coverageErr;
+    if (!flushCoverageIfActive(&coverageFiles, &coverageErr))
+    {
+        QMessageBox::warning(mainWindow, "melonDS", coverageErr);
+        return false;
+    }
+    for (const auto& path : coverageFiles)
+        osdAddMessage(0, "Coverage saved: %s", path.toStdString().c_str());
+
     if (consoleType == 1)
     {
         QMessageBox::critical(mainWindow, "melonDS", "The DSi doesn't have a GBA slot.");
@@ -1934,6 +2178,18 @@ void EmuInstance::loadGBAAddon(int type)
 
 void EmuInstance::ejectGBACart()
 {
+    QStringList coverageFiles;
+    QString coverageErr;
+    if (!flushCoverageIfActive(&coverageFiles, &coverageErr))
+    {
+        QMessageBox::warning(mainWindow, "melonDS", coverageErr);
+    }
+    else
+    {
+        for (const auto& path : coverageFiles)
+            osdAddMessage(0, "Coverage saved: %s", path.toStdString().c_str());
+    }
+
     gbaSave = nullptr;
 
     nds->EjectGBACart();
